@@ -137,7 +137,7 @@ void aie2_dump_ctx(struct amdxdna_ctx *ctx)
 		ctx->health_reported = false;
 
 		// Print tile core dumps
-		print_hex_dump(KERN_INFO, "tile_core_dump: ", DUMP_PREFIX_OFFSET, 16, 2,
+		print_hex_dump(KERN_INFO, "tile_core_dump: ", DUMP_PREFIX_OFFSET, 16, 4,
 					tile_buff[0], AIE2_TILE_CORE_DUMP_SIZE, false);
 	}
 	aie2_mgmt_buff_free(&mgmt_hdl);
@@ -159,15 +159,15 @@ void aie2_dump_ctx(struct amdxdna_ctx *ctx)
 	mutex_unlock(&ctx->priv->io_lock);
 
 free_mem:
+	for (int i = 0; i < AIE2_NUM_TILES; i++) {
+		if (tile_buff[i])
+			aie2_mgmt_buff_free(&tile_mgmt_hdl[i]);
+	}
 	if (tile_buff) {
 		kfree(tile_buff);
 	}
 	if (tile_mgmt_hdl) {
 		kfree(tile_mgmt_hdl);
-	}
-	for (int i = 0; i < AIE2_NUM_TILES; i++) {
-		if (tile_buff[i])
-			aie2_mgmt_buff_free(&tile_mgmt_hdl[i]);
 	}
 }
 
