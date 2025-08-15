@@ -710,11 +710,13 @@ int aie2_get_app_health(struct amdxdna_dev_hdl *ndev, struct aie2_mgmt_dma_hdl *
 		}
 	}
 
+	uint64_t start = ktime_get_ns();
 	ret = aie2_send_mgmt_msg_wait_silent(ndev, &msg);
 	if (ret) {
 		XDNA_DBG(xdna, "Get app health failed, ret 0x%x", ret);
 		return ret;
 	}
+	XDNA_DBG(xdna, "Get app health duration %llu", ktime_get_ns() - start);
 
 	if (resp.status != AIE2_STATUS_SUCCESS) {
 		XDNA_DBG(xdna, "Get app health got status 0x%x", resp.status);

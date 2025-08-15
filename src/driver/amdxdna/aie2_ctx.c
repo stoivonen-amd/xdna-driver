@@ -136,9 +136,23 @@ void aie2_dump_ctx(struct amdxdna_ctx *ctx)
 		ctx->health_data.version = 0;
 		ctx->health_reported = false;
 
-		// Print tile core dumps
-		print_hex_dump(KERN_INFO, "tile_core_dump: ", DUMP_PREFIX_OFFSET, 16, 4,
-					tile_buff[0], AIE2_TILE_CORE_DUMP_SIZE, false);
+		for (unsigned col = 0; col < 8; ++col) {
+			unsigned counts[6];
+
+			for (unsigned row = 0; row < 6; ++row) {
+				unsigned i = row + (col * 6);
+
+				counts[row] = 0;
+
+				uint8_t* buf = tile_buff[i];
+				for (unsigned j = 0; j < AIE2_TILE_CORE_DUMP_SIZE; ++j) {
+					counts[row] += (buf[j] != 0);
+				}
+
+				//print_hex_dump(KERN_INFO, "tile_core_dump: ", DUMP_PREFIX_OFFSET, 16, 4, tile_buff[i], AIE2_TILE_CORE_DUMP_SIZE, false);
+			}
+			XDNA_ERR(xdna, "\tTile Cores Col=%u: %05x %05x %05x %05x %05x %05x", col, counts[0], counts[1], counts[2], counts[3], counts[4], counts[5]);
+		}
 	}
 	aie2_mgmt_buff_free(&mgmt_hdl);
 
