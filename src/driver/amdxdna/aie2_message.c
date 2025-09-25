@@ -697,6 +697,126 @@ void aie2_reset_app_health_report(struct app_health_report *r)
 	r->ctx_pc = AIE2_APP_HEALTH_RESET_CTX_PC;
 }
 
+struct buffer_allocations {
+	struct aie2_mgmt_dma_hdl hdl;
+	uint8_t* buffer;
+};
+
+int aie2_get_aie_coredump(struct amdxdna_dev_hdl *ndev, u32 context_id, u32 num_col)
+{
+	DECLARE_AIE2_MSG(get_aie_coredump, MSG_OP_GET_AIE_COREDUMP);
+	struct amdxdna_dev *xdna = ndev->xdna;
+	int ret;
+
+	req.context_id  = context_id;
+	req.num_buffers = 0;
+
+	int num_bytes = num_col * 6 * 1024*1024;
+
+	struct aie2_mgmt_dma_hdl         buffers_list_hdl;
+	struct aie_coredump_buffer_list* buffers_list = 0;
+
+	struct buffer_allocations* buffer_allocations = 0;
+
+	const unsigned MAX_COREDUMP_BUFFERS = 64;
+
+	buffers_list = aie2_mgmt_buff_alloc(ndev, &buffers_list_hdl, sizeof(struct aie_coredump_buffer_list) * MAX_COREDUMP_BUFFERS, DMA_TO_DEVICE);
+	if (!buffers_list) {
+		XDNA_ERR(xdna, "Failed to allocate buffers_list for AIE core dump");
+		ret = -ENOMEM;
+		goto free_mem;
+	}
+
+	buffer_allocations = kcalloc(MAX_COREDUMP_BUFFERS, sizeof(struct buffer_allocations), GFP_KERNEL);
+	if (!buffer_allocations) {
+		XDNA_ERR(xdna, "Failed to allocate buffer_allocations for AIE core dump");
+		ret = -ENOMEM;
+		goto free_mem;
+	}
+
+	while(num_bytes > 0) {
+		unsigned next_size = MIN(1024*1024*2, num_bytes);
+
+		buffer_allocations[req.num_buffers].buffer = aie2_mgmt_buff_alloc(ndev, &buffer_allocations[req.num_buffers].hdl, next_size, DMA_FROM_DEVICE);
+		if (!buffer_allocations[req.num_buffers].buffer) {
+			XDNA_ERR(xdna, "Failed to allocate %d bytes for AIE core dump (buffer = %d)", next_size, req.num_buffers);
+			ret = -ENOMEM;
+			goto free_mem;
+		}
+
+		buffers_list[req.num_buffers].buffer_address = aie2_mgmt_buff_get_dma_addr(&buffer_allocations[req.num_buffers].hdl);
+		if (!buffers_list[req.num_buffers].buffer_address) {
+			XDNA_ERR(xdna, "Invalid DMA address: %lld", buffers_list[req.num_buffers].buffer_address);
+			ret = -EINVAL;
+			goto free_mem;
+		}
+
+		buffers_list[req.num_buffers].buffer_size = next_size;
+		++req.num_buffers;
+
+		if (req.num_buffers >= MAX_COREDUMP_BUFFERS) {
+			XDNA_ERR(xdna, "Too many buffers for AIE core dump");
+			ret = -EINVAL;
+			goto free_mem;
+		}
+
+		num_bytes -= next_size;
+	}
+
+	req.buffers_list_address = aie2_mgmt_buff_get_dma_addr(&buffers_list_hdl);
+	aie2_mgmt_buff_clflush(&buffers_list_hdl);
+
+	uint64_t start = ktime_get_ns();
+	ret = aie2_send_mgmt_msg_wait_silent(ndev, &msg);
+	if (ret) {
+		XDNA_DBG(xdna, "Get AIE core dump failed (cols=%d num_buffers=%d), ret %d", num_col, req.num_buffers, ret);
+		goto free_mem;
+	}
+	uint64_t end = ktime_get_ns();
+
+	XDNA_DBG(xdna, "Get AIE core dump success in %lld ns (cols=%d num_buffers=%d)", end - start, num_col, req.num_buffers);
+
+	char outFile[256];
+	snprintf(outFile, sizeof(outFile), "/tmp/aie_coredump_%lld_ctx%d_cols%d.bin", ktime_get_real_ns(), context_id, num_col);
+
+	struct file* f = filp_open(outFile, O_WRONLY|O_CREAT|O_TRUNC, 0644);
+	if (IS_ERR(f)) {
+		XDNA_ERR(xdna, "Failed to open %s for writing AIE core dump", outFile);
+		ret = -EIO;
+		goto free_mem;
+	}
+
+	for (unsigned i = 0; i < req.num_buffers; ++i) {
+		ssize_t written = kernel_write(f, buffer_allocations[i].buffer, buffers_list[i].buffer_size, &f->f_pos);
+		if (written != buffers_list[i].buffer_size) {
+			XDNA_ERR(xdna, "Failed to write %d bytes to %s for AIE core dump, wrote %zd", buffers_list[i].buffer_size, outFile, written);
+			ret = -EIO;
+			goto close_file;
+		}
+	}
+
+	XDNA_DBG(xdna, "Wrote aie coredump to %s (bytes=%llu)", outFile, f->f_pos);
+
+close_file:
+	filp_close(f, NULL);
+
+free_mem:
+	if (buffer_allocations) {
+		for (int i = 0; i < req.num_buffers; ++i) {
+			if (buffer_allocations[i].buffer) {
+				aie2_mgmt_buff_free(&buffer_allocations[i].hdl);
+			}
+		}
+
+		kfree(buffer_allocations);
+	}
+
+	if (buffers_list) {
+		aie2_mgmt_buff_free(&buffers_list_hdl);
+	}
+	return ret;
+}
+
 int aie2_get_app_health(struct amdxdna_dev_hdl *ndev, struct aie2_mgmt_dma_hdl *mgmt_hdl,
 			u32 context_id, u32 size)
 {

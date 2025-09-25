@@ -102,6 +102,10 @@ void aie2_dump_ctx(struct amdxdna_ctx *ctx)
 	}
 	aie2_mgmt_buff_free(&mgmt_hdl);
 
+	mutex_lock(&ndev->aie2_lock);
+	ret = aie2_get_aie_coredump(ndev, ctx->priv->id, ctx->priv->orig_num_col);
+	mutex_unlock(&ndev->aie2_lock);
+
 	mutex_lock(&ctx->priv->io_lock);
 	for (int i = 0; i < CTX_MAX_CMDS; i++) {
 		struct amdxdna_sched_job *j;

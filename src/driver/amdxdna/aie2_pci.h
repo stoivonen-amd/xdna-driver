@@ -498,6 +498,7 @@ int aie2_check_protocol_version(struct amdxdna_dev_hdl *ndev);
 int aie2_assign_mgmt_pasid(struct amdxdna_dev_hdl *ndev, u16 pasid);
 int aie2_query_aie_telemetry(struct amdxdna_dev_hdl *ndev, struct aie2_mgmt_dma_hdl *mgmt_hdl,
 			     u32 type, u32 size, struct aie_version *version);
+int aie2_get_aie_coredump(struct amdxdna_dev_hdl *ndev, u32 context_id, u32 num_col);
 int aie2_get_app_health(struct amdxdna_dev_hdl *ndev, struct aie2_mgmt_dma_hdl *mgmt_hdl,
 			u32 context_id, u32 size);
 void aie2_reset_app_health_report(struct app_health_report *r);

@@ -49,6 +49,7 @@ enum aie2_msg_opcode {
 	MSG_OP_GET_APP_HEALTH              = 0x114,
 	MSG_OP_ADD_HOST_BUFFER             = 0x115,
 	MSG_OP_CONFIG_FW_LOG		   = 0x116,
+	MSG_OP_GET_AIE_COREDUMP            = 0x119,
 	MSG_OP_MAX_DRV_OPCODE,
 	MSG_OP_GET_PROTOCOL_VERSION        = 0x301,
 	MSG_OP_MAX_OPCODE
@@ -725,6 +726,32 @@ struct get_app_health_req {
 } __packed;
 
 struct get_app_health_resp {
+	enum aie2_msg_status status;
+	u32 required_buffer_size;
+	u32 reserved[7];
+} __packed;
+
+// each buffer in the buffer list should be
+//     1. 32KB aligned
+//     2. Not cross 64MB boundary
+struct aie_coredump_buffer_list {
+    u64 buffer_address;
+    u32 buffer_size;
+    u32 reserved;
+};
+
+// We use buffer list to avoid driver side 
+// allocating one large contiguous buffer
+struct get_aie_coredump_req {
+    u32 context_id;
+    u32 num_buffers;
+	u64 buffers_list_address;
+} __packed;
+
+// If the total size of the buffers in buffer list is smaller
+// than the required size to dump the whole AIE partition, we
+// return errors with the required size.
+struct get_aie_coredump_resp {
 	enum aie2_msg_status status;
 	u32 required_buffer_size;
 	u32 reserved[7];

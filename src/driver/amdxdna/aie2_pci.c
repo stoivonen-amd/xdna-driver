@@ -1276,6 +1276,7 @@ static int aie2_query_ctx_status_array(struct amdxdna_client *client,
 				mutex_lock(&xdna->dev_handle->aie2_lock);
 				ret = aie2_get_app_health(xdna->dev_handle, &mgmt_hdl,
 							  ctx->priv->id, sizeof(*r));
+				aie2_get_aie_coredump(xdna->dev_handle, ctx->priv->id, ctx->priv->orig_num_col);
 				mutex_unlock(&xdna->dev_handle->aie2_lock);
 				if (ret)
 					aie2_reset_app_health_report(r);
